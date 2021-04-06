@@ -1,0 +1,195 @@
+/**
+ * Create a business network for initiation of clinical trial by pharmaceutical company,
+ * Meta Pharma.
+ * Meta Pharma company produces 7,500 units of temperature control drug and transports
+ * to hospitals
+ * in France. The first step is to ship the drug to a storage facility where couriers
+ * will deliver the goods to *respective locations for patients to use in clinical trials.
+*/
+
+namespace org.acme.shipping.clinical_trials
+
+/**
+ * Status of shipping the drug
+ */
+enum DrugShipmentStatus {
+  o CREATED
+  o IN_TRANSIT
+  o RECEIVED
+}
+
+enum DrugBatchStatus {
+  o CREATED
+  o IN_TRANSIT
+  o RECEIVED
+}
+
+/**
+* TRANSACTIONS
+ * An abstract transaction relating to shipment of drug to a storage facility or to respective hospital.
+ */
+
+transaction Create_Drug_Batch {
+  o String ID
+  o DrugBatchStatus status
+  o String drugName
+  o Integer drugQuantity
+  o Integer drugDuration
+  o DrugShipment drugshipment optional
+  --> Production Production
+}
+
+event Create_Drug_Batch_Event {
+  o DrugBatchStatus DrugBatchStatus
+  --> Production Production
+  --> DrugDetails DrugDetails
+}
+
+transaction PostAudit {
+}
+
+abstract transaction DrugShipmentTransaction {
+  --> DrugShipment drugshipment
+}
+
+/**
+ * A temperature reading for a shipment
+ */
+transaction TemperatureReading extends DrugShipmentTransaction {
+  o Double centigrade
+}
+
+/**
+ * A notification that a shipment has been received by the
+ * storage facility or Meta Pharma.
+*/
+transaction ShipmentReceived extends DrugShipmentTransaction {
+  o DrugShipmentStatus status
+}
+
+
+
+
+/**
+ * ASSETS
+ * A shipment being tracked as an asset on the ledger of the storage facility. Note, the     “destination” attribute is the specific hospital name in France.
+ */
+asset DrugShipment identified by drugShipID {
+  o String drugShipID
+  o String drugName
+  o DrugShipmentStatus status
+  o Long unitCount
+  o String courier_name
+  o String destination
+  o TemperatureReading[] temperatureReadings optional
+  --> StorageFacility sf
+
+}
+
+/**
+ Contract established with participants of business network. The “contractId” is a string value indicating the designated organization (Administration or Audit) and information placed in appropriate ledger.
+ */
+
+asset Contract identified by contractId {
+  o String contractId
+  --> Administration admin
+  --> Audit audit
+  --> Production  production
+  --> StorageFacility storagefacility
+  o DateTime arrivalTime
+  o Double minTemperature
+  o Double maxTemperature
+}
+
+/**
+ * A template for street address object
+ */
+concept Address {
+  o String city
+  o String country
+  o String street
+  o String zip
+}
+
+asset DrugDetails identified by ID {
+  o String ID
+  o DrugBatchStatus status
+  o String drugName
+  o Integer drugQuantity
+  o Integer drugDuration
+  o DrugShipment drugshipment optional
+ }
+
+/**
+* PARTICIPANTS
+ * An abstract participant type defines the attributes of objects involved in business network
+ */
+
+participant Hospital identified by email{
+  o String email
+  o Address address
+  --> Patient pt
+}
+
+
+participant Courier identified by courierID {
+  o String courierID
+  o Address address
+  o DrugShipmentStatus status
+  --> Hospital hosp
+}
+
+participant Patient identified by patientID{
+  o String patientID
+  o String date_of_birth
+  o String firstName
+  o String lastName
+
+
+}
+
+/**
+ *  Administration (organization), a participant in the network.
+ */
+
+
+participant Administration identified by email {
+  o String email
+  o String business_name
+  o String address
+}
+
+/**
+ * An Audit (organization), a participant in the network
+ */
+participant Audit identified by auditID {
+  o String auditID
+  o StorageFacility storage_facility
+  o DrugDetails drugdetails
+  o Patient pt
+}
+
+/**
+ * A Production (organization), a participant in the network
+ */
+participant Production identified by email {
+  o String email
+  o Hospital hosp
+}
+
+/**
+ * StorageFacility (organization), a participant in the network
+ */
+participant StorageFacility identified by storageID {
+  o String storageID
+  o Address address
+  o DrugShipment drugShipment
+  o DrugShipmentStatus status
+  --> Courier courier
+}
+
+/**
+ * JUST FOR INITIALIZING A DEMO
+ */
+transaction SetupDemo {
+}

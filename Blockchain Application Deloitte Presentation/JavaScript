@@ -1,0 +1,260 @@
+/**
+ * Create a drug batch
+ * @param {org.acme.shipping.clinical_trials.Create_Drug_Batch} create_batch
+ * @transaction
+ */
+
+async function Create_Drug_Batch(create_batch) { // eslint-disable-line no-unused-vars
+	const factory = getFactory();
+    const NS = 'org.acme.shipping.clinical_trials';
+
+  	drugBatch = factory.newResource(NS, 'DrugDetails',  create_batch.ID)
+    drugBatch.ID = create_batch.ID
+  	drugBatch.status = "CREATED"
+  	drugBatch.drugName = create_batch.drugName;
+  	drugBatch.drugQuantity = create_batch.drugQuantity;
+  	drugBatch.drugDuration = create_batch.drugDuration;
+
+
+  // save drug details to registry
+  	const assetregistry = await getAssetRegistry(NS + '.DrugDetails')
+    await assetregistry.add(drugBatch)
+
+
+  // emit the event
+    const place_drug_batch_event = factory.newEvent(NS, 'Create_Drug_Batch_Event');
+
+ 	place_drug_batch_event.DrugDetails = drugBatch;
+  	place_drug_batch_event.DrugBatchStatus = drugBatch.status;
+    place_drug_batch_event.Production = create_batch.Production;
+    emit(place_drug_batch_event);
+
+}
+
+
+/**
+ * A temperature reading has been received for a shipment, read from some IOT device and manually
+ * input into fields.
+ * @param {org.acme.shipping.clinical_trials.TemperatureReading} temperatureReading - the
+ *  TemperatureReading transaction
+ * @transaction
+ */
+async function temperatureReading(temperatureReading) {  // eslint-disable-line no-unused-vars
+
+    const shipment = temperatureReading.shipment;
+
+    console.log('Adding temperature ' + temperatureReading.centigrade + ' to ledger ' );
+
+    if (shipment.temperatureReadings) {
+        shipment.temperatureReadings.push(temperatureReading);
+    } else {
+        shipment.temperatureReadings = [temperatureReading];
+    }
+
+    // add the temp reading to the shipment
+    const shipmentRegistry = await getAssetRegistry('org.acme.shipping.clinical_trials.DrugShipment');
+    await shipmentRegistry.update(shipment);
+}
+
+  
+
+
+/**
+* Create audit trail containing detailed information of entities available for viewing by 
+* MetaPharma
+* @param {org.acme.shipping.clinical_trials.PostAudit} create_audit
+* @transaction
+*/
+
+async function PostAudit(create_audit) { // eslint-disable-line no-unused-vars
+const factory = getFactory();
+const NS = 'org.acme.shipping.clinical_trials';
+
+let results = await query('selectCreateDrugBatches');
+console.log(results);
+  
+const auditdetails = factory.newResource(NS, 'AuditDetails', create_audit.ID);
+auditdetails.ID = create_audit.ID;
+auditdetails.hospital_name = create_audit.hospital_name
+auditdetails.drugName = create_audit.drugName
+
+
+// save audit details to registry 
+const assetregistry = await getAssetRegistry(NS + '.AuditDetails');
+await assetregistry.update(auditdetails)
+
+// emit the event
+const place_audit = factory.newEvent(NS, 'Audit_Event');
+place_audit.Production=auditdetails.Production; 
+place_audit.DrugDetails= auditdetails.DrugDetails; 
+place_audit.Administration=auditdetails.Administration; 
+emit(place_audit); 
+}
+
+
+
+
+
+/**  Initialize some test assets and participants useful for running a demo.
+  @param {org.acme.shipping.clinical_trials.SetupDemo} setupDemo
+  @transaction
+ */
+
+async function setupDemo(setupDemo) {  // eslint-disable-line no-unused-vars
+
+    const factory = getFactory();
+    const NS = 'org.acme.shipping.clinical_trials';
+
+	// PARTICIPANTS    (HR)
+
+
+    // create the Administration
+    const administration = factory.newResource(NS, 'Administration',                  getCurrentParticipant().getIdentifier());
+    administration.email = 'ahof@amail.com';
+    administration.business_name = 'American Hospital of France';
+    administration.address= '222 Loius St.';
+
+    // create the Hospital
+    const hospital= factory.newResource(NS, 'Hospital', getCurrentParticipant().getIdentifier());
+    const hospitalAddress = factory.newConcept(NS, 'Address');
+    hospital.city = 'Paris';
+    hospital.address = hospitalAddress;
+    hospital.country = 'France';
+	hospital.street = '222 Louis St.';
+	hospital.email = 'Hosp@hmail.com';
+	hospital.patient = factory.newRelationship(NS,'Patient', getCurrentParticipant().getIdentifier());
+
+    // create the Patient
+    const patient = factory.newResource(NS, 'Patient', getCurrentParticipant().getIdentifier());
+    patient.date_of_birth= '01/10/2000';
+    patient.firstName = 'Jonas';
+    patient.lastName = 'Millon';
+
+
+	  // create the Production
+    const production= factory.newResource(NS, 'Production', getCurrentParticipant().getIdentifier());
+    production.email='prod@email.com';
+    const toHospitalRef = factory.newRelationship(NS, 'Hospital', getCurrentParticipant().getIdentifier());
+    production.hosp= toHospitalRef;
+
+
+
+	  // create the StorageFacility
+    const storage_facility = factory.newResource(NS, 'StorageFacility', getCurrentParticipant().getIdentifier());
+    const storage_facilityAddress = factory.newConcept(NS, 'Address');
+	storage_facility.storageID = 'Paris-5656';
+    storage_facilityAddress.country = 'France';
+    storage_facility.address = storage_facilityAddress;
+	storage_facility.drugShipment= DrugShipment.drugName;
+	storage_facility.status = 'RECEIVED';
+	const toCourierRef = factory.newRelationship(NS, 'Courier', getCurrentParticipant().getIdentifier());
+    storage_facility.courier= toCourierRef;
+
+
+	// create the Courier
+    const courier = factory.newResource(NS, 'Courier', getCurrentParticipant().getIdentifier());
+    const courierAddress = factory.newConcept(NS, 'Address');
+	courier.courierID = 'Fedex-5656';
+    courierAddress.country = 'France';
+    courier.address = courierAddress;
+    courier.courierID= 'company_2234';
+    courier.status='IN_TRANSIT';
+	const toHospRef = factory.newRelationship(NS, 'Hospital', getCurrentParticipant().getIdentifier());
+    courier.hosp= toHospRef;
+
+
+	  // create the Audit
+    const audits= factory.newResource(NS, 'Audit', getCurrentParticipant().getIdentifier());
+    const auditAddress = factory.newConcept(NS, 'Address');
+	audits.auditID = 'Audit_ctrial-2020';
+    auditAddress.country = 'France';
+    audits.address = auditAddress;
+	audits.storage_facility= StorageFacility.storage_facility;
+	audits.drugdetails = DrugDetails.drugdetails;
+	audits.pt = Patient.date_of_birth;
+
+
+
+
+
+	// ASSETS
+    // create the Contract   (GH)
+    const contract = factory.newResource(NS, 'Contract', 'CON_001');
+
+    contract.admin = factory.newRelationship(NS, 'Administration', 'ahof@amail.com');
+    contract.audit = factory.newRelationship(NS, 'Auditer', 'audit@email.com');
+    contract.production = factory.newRelationship(NS, 'Production', 'production@email.com');
+    contract.storagefacility = factory.newRelationship(NS, 'Storage Facility', 'storagefacility@email.com');
+    contract.courier = factory.newRelationship(NS, 'Courier', 'cservice@email.com');
+
+    contract.contractId = 'CON_001'; // name of the contract
+    contract.minTemperature = 5; // min temperature for the cargo
+    contract.maxTemperature = 15; // max temperature for the cargo
+
+    //const tomorrow = setupDemo.timestamp;
+    //tomorrow.setDate(tomorrow.getDate() + 1);
+    //contract.unitPrice = 0.5; pay 50 cents per unit
+    //contract.minTemperature = 2;  min temperature for the cargo
+    //contract.maxTemperature = 10;  max temperature for the cargo
+    //contract.minPenaltyFactor = 0.2;  we reduce the price by 20 cents for every degree below the min temp
+    //contract.maxPenaltyFactor = 0.1;  we reduce the price by 10 cents for every degree above the max temp
+
+    // create the DrugDetails   (GH)
+    const shipment = factory.newResource(NS, 'Shipment', 'SHIP_001');
+    shipment.drugName = 'AZO-D';
+    shipment.drugQuantity = 5000;
+    shipment.Duration = 12;
+    shipment.contract = factory.newRelationship(NS, 'Contract', 'CON_001');
+
+	// create the DrugShipment   (GH)
+    const shipment1 = factory.newResource(NS, 'Shipment', 'SHIP_001');
+    shipment1.drugname = 'AZO-D';
+    shipment1.status = 'IN_TRANSIT';
+    shipment1.unitCount = 5000;
+    shipment1.courier_name = 'USPA';
+    shipment1.destination = 'France';
+    shipment1.TemperatureReading = [5,10,13];
+    shipment1.contract = factory.newRelationship(NS, 'Contract', 'CON_001');
+
+	// Add PARTICIPANTS/ASSETS to the network
+
+	// add Administration registry
+    const AdministrationRegistry = await getParticipantRegistry(NS + '.Administration');
+    await AdministrationRegistry.addAll([Administration]);
+
+    // add hospital registry
+    const hospitalRegistry = await getParticipantRegistry(NS + '.Hospital');
+    await hospitalRegistry.addAll([Hospital]);
+
+    // add the patient registry
+    const patientRegistry = await getParticipantRegistry(NS + '.Patient');
+    await patientRegistry.addAll([Patient]);
+
+	// add the production registry
+    const productionRegistry = await getParticipantRegistry(NS + '.Production');
+    await productionRegistry.addAll([Production]);
+
+	// add the storage facility registry
+    const storagefacelityRegistry = await getParticipantRegistry(NS + '.StorageFacility');
+    await storagefacelityRegistry.addAll([StorageFacility]);
+
+	// add the courier registry
+    const courierRegistry = await getParticipantRegistry(NS + '.Courier');
+    await courierRegistry.addAll([Courier]);
+
+	// add the audit registry
+    const auditRegistry = await getParticipantRegistry(NS + '.Audit');
+    await auditRegistry.addAll([Audit]);
+
+    // add the contracts registry
+    const contractRegistry = await getAssetRegistry(NS + '.Contract');
+    await contractRegistry.addAll([contract]);
+
+    // add the Drug Details registry
+    const DrugDetailsRegistry = await getAssetRegistry(NS + '.DrugDetails');
+    await DrugDetailsRegistry.addAll([DrugDetails]);
+
+	// add the Drug Shipment registry
+    const DrugShipmentRegistry = await getAssetRegistry(NS + '.DrugShipment');
+    await DrugShipmentRegistry.addAll([DrugShipment]);
+}
